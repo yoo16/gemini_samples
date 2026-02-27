@@ -1,89 +1,178 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const startButton = document.getElementById('startButton');
-    const resultElement = document.getElementById('result');
+const TRANSLATION_URI = 'http://localhost/gemini-php/api/translate/ai_translate.php';
 
-    // 音声認識が利用できるか確認
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-        alert("このブラウザは音声認識に対応していません。Google Chromeなど最新のブラウザを使用してください。");
-        return;
-    }
+const startButton = document.getElementById('startButton');
+const resultElement = document.getElementById('result');
+const statusElement = document.getElementById('status');
+const fromLangSelect = document.getElementById('fromLang');
+const toLangSelect = document.getElementById('toLang');
+const chatHistoryElement = document.getElementById('chatHistory');
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'ja-JP'; // 日本語対応
+var historyList = [];
+SpeechRecognition = webkitSpeechRecognition || SpeechRecognition;
+const recognition = new SpeechRecognition();
+recognition.interimResults = false;
 
-    // 音声認識が開始されたとき
-    recognition.onstart = () => {
-        resultElement.textContent = "音声認識中...";
-    };
+recognition.onstart = () => {
+    statusElement.textContent = "音声認識中...";
+};
 
-    const fromLang = 'js-JP';
-    const toLang = 'en-US';
-    // 音声認識が終了したとき
-    recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript; // 音声認識結果
-        resultElement.textContent = transcript; // 結果を表示
+recognition.onresult = (event) => {
+    console.log('onresult')
+    var text = event.results[0][0].transcript;
+    resultElement.value = text;
+    addOrigin(text);
+    translate(text, fromLangSelect.value, toLangSelect.value);
+}
 
-        // 翻訳
-        translate(transcript, fromLang, toLang);
-    };
+recognition.onend = () => {
+    console.log('音声認識が終了しました');
+    statusElement.textContent = "";
+};
 
-    // エラーハンドリング
-    recognition.onerror = (event) => {
-        resultElement.textContent = `エラーが発生しました: ${event.error}`;
-    };
+recognition.onerror = (event) => {
+    statusElement.textContent = `エラーが発生しました: ${event.error}`;
+};
 
-    // ボタンがクリックされたとき、音声認識を開始
-    startButton.addEventListener('click', () => {
-        recognition.start();
-    });
-});
+// ボタンがクリックされたとき、音声認識を開始
+const startSpeech = () => {
+    console.log("Lang: ", fromLangSelect.value);
+    recognition.lang = fromLangSelect.value;
+    recognition.start(); // 音声認識を開始
+}
 
-// URL
-// AI生成アプリのURL
-const uri = 'http://localhost/gemini-php/api/ai_translate.php';
+/**
+ * 翻訳イベント
+ */
+const handleTranslate = () => {
+    var text = resultElement.value;
+    if (!text) return;
 
-const translate = async (transcript, fromLang, toLang) => {
-    await fetch(uri, {
-        method: 'POST',  // POSTリクエストを指定
+    addOrigin(text);
+    // addTranslation(text);
+    translate(text, fromLangSelect.value, toLangSelect.value);
+}
+
+/**
+ * 翻訳
+ */
+const translate = async (text, fromLang, toLang) => {
+    statusElement.textContent = "翻訳中...";
+
+    await fetch(TRANSLATION_URI, {
+        method: 'POST',
         headers: {
-            'Content-Type': 'application/json'  // JSON形式で送信するためのヘッダー
+            'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            transcript: transcript,
+            origin: text,
             fromLang: fromLang,
             toLang: toLang
-        })  // 送信するデータをJSON形式に変換
+        })
     })
         .then(response => {
+            statusElement.textContent = "";
             if (!response.ok) {
                 throw new Error('Network response was not ok');
             }
-            return response.json();  // サーバーからのレスポンスをJSON形式で取得
+            return response.json();
         })
-        .then(translationData => {
-            console.log(translationData);
-            // 翻訳結果を処理する関数を呼び出す (必要に応じて)
-            renderTranslation(translationData);
+        .then(data => {
+            console.log(data)
+            renderTranslation(data);
         })
         .catch(error => {
             console.error('Fetch error:', error);
         });
 };
 
+// 翻訳結果を表示
 const renderTranslation = (translationData) => {
-    addTranslationToHistory(translationData);
+    addTranslation(translationData);
+    speakTranslation(translationData.translate); // 翻訳結果を読み上げる
 };
 
-const addTranslationToHistory = (translationData) => {
-    const listItem = document.createElement('li');
-    listItem.classList.add('bg-gray-200', 'p-2', 'my-2', 'rounded');
+const addOrigin = (text, lang) => {
+    // 翻訳前の吹き出しを作成（左側）
+    const originalMessageDiv = document.createElement('div');
+    originalMessageDiv.classList.add('flex', 'justify-start');
 
-    // 翻訳結果をHTMLに表示
-    listItem.innerHTML = `
-        <p><strong>Translated:</strong> ${translationData.translate}</p>
-    `;
+    const originalBubble = document.createElement('div');
+    originalBubble.classList.add('bg-teal-500', 'text-white', 'rounded-lg', 'p-3', 'max-w-xs', 'text-left');
+    originalBubble.innerHTML = text;
 
-    const historyElement = document.getElementById('history');
-    historyElement.appendChild(listItem);
+    originalMessageDiv.appendChild(originalBubble);
+    chatHistoryElement.appendChild(originalMessageDiv);
+}
+
+// 翻訳履歴を追加
+const addTranslation = (result) => {
+    // 翻訳後の吹き出しを作成（右側）
+    const translationMessageDiv = document.createElement('div');
+    translationMessageDiv.classList.add('flex', 'justify-end');
+
+    const translationBubble = document.createElement('div');
+    translationBubble.classList.add('bg-gray-300', 'text-gray-800', 'rounded-lg', 'p-3', 'max-w-xs', 'text-left');
+    translationBubble.innerHTML = result.translate ? result.translate : "Translation error.";
+
+    translationMessageDiv.appendChild(translationBubble);
+
+    // チャット履歴に追加
+    chatHistoryElement.appendChild(translationMessageDiv);
 };
+
+const playText = () => {
+    if (lastTranslation) {
+        speakTranslation(lastTranslation); // 最後の翻訳結果を読み上げ
+    } else {
+        console.log('再生する翻訳結果がありません');
+    }
+}
+
+// TODO: Chromeで利用できない
+// 翻訳結果を音声で読み上げ
+const speakTranslation = (text) => {
+    console.log('speakTranslation', text, toLangSelect.value)
+    const synth = window.speechSynthesis;
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = toLangSelect.value;
+    synth.speak(utterance);
+
+    synth.addEventListener('voiceschanged', () => {
+        console.log('voice changed')
+        const voice = speechSynthesis.getVoices();
+        console.log(voice);
+    });
+};
+
+const swapLanguages = () => {
+    const fromLang = fromLangSelect.value;
+    const toLang = toLangSelect.value;
+
+    // 入れ替える
+    fromLangSelect.value = toLang;
+    toLangSelect.value = fromLang;
+};
+
+/**
+ * saveHistory
+ */
+const saveHistory = () => {
+    alert('会話を保存しました');
+}
+
+
+/**
+ * キーボード操作
+ */
+document.addEventListener('keydown', (event) => {
+    // 音声入力
+    if (event.ctrlKey && event.code === 'KeyI') {
+        event.preventDefault();
+        startSpeech();
+    }
+    // 言語を入れ替える
+    if (event.ctrlKey && event.code === 'KeyL') {
+        event.preventDefault();
+        swapLanguages();
+    }
+});
