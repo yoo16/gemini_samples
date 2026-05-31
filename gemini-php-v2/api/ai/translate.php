@@ -1,6 +1,6 @@
 <?php
 // env.php を読み込み
-require_once '../env.php';
+require_once '../../env.php';
 
 
 // PHPでPOSTリクエストからデータを受け取る

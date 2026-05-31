@@ -2,4 +2,5 @@
 .DS_Store
 .venv/
 .vscode/
+env.php
 node_modules/

@@ -1,6 +1,6 @@
 <?php
 // env.php を読み込み
-require_once '../env.php';
+require_once '../../env.php';
 
 // Gemini APIの場合
 $posts = json_decode(file_get_contents('php://input'), true);
